@@ -1,0 +1,20 @@
+---
+# Public name of the DoH service (nginx server_name and the self-signed certificate CN).
+doh_nginx_server_name: dns.example.com
+
+# Networks allowed to use /dns-query. Loopback is included so tests/verify.yml works on the host.
+doh_nginx_allow:
+  - 127.0.0.1
+  - "::1"
+  - 192.168.0.0/16
+  - 10.0.0.0/8
+
+# Set to false and point these at your Let's Encrypt files to use a real certificate:
+# doh_nginx_selfsigned: false
+# doh_nginx_ssl_certificate: /etc/letsencrypt/live/dns.example.com/fullchain.pem
+# doh_nginx_ssl_certificate_key: /etc/letsencrypt/live/dns.example.com/privkey.pem
+doh_nginx_selfsigned: true
+
+# doh-server listens on 8054, so it does not clash with the BIND statistics channel (8053)
+# from the monitoring post in this series.
+doh_server_port: 8054

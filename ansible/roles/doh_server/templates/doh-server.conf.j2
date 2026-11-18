@@ -1,0 +1,24 @@
+# /etc/dns-over-https/doh-server.conf
+# {{ ansible_managed }}
+
+listen = [
+    "127.0.0.1:{{ doh_server_port }}",
+    "[::1]:{{ doh_server_port }}",
+]
+
+path = "{{ doh_server_path }}"
+
+upstream = [
+{% for u in doh_server_upstream %}
+    "{{ u }}",
+{% endfor %}
+]
+
+timeout = {{ doh_server_timeout }}
+tries = {{ doh_server_tries }}
+verbose = {{ doh_server_verbose | lower }}
+log_guessed_client_ip = false
+
+# ECS (EDNS Client Subnet) handling
+ecs_allow_non_global_ip = false
+ecs_use_precise_ip = false

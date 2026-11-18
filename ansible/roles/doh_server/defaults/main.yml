@@ -1,0 +1,14 @@
+---
+doh_server_version: v2.3.10
+doh_server_port: 8054
+doh_server_path: /dns-query
+doh_server_upstream:
+  - udp:127.0.0.1:53
+doh_server_timeout: 10
+doh_server_tries: 3
+doh_server_verbose: false
+# v2.3.10 needs Go 1.23.5; Ubuntu 24.04 ships 1.22, so let the go command fetch the right toolchain.
+doh_server_gotoolchain: auto
+doh_server_build_dir: /var/cache/doh-server-build
+doh_server_install_dir: /opt/doh-server
+doh_server_remove_build_cache: true

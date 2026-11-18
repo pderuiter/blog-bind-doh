@@ -1,0 +1,16 @@
+// {{ bind_install_options_conf }}
+// {{ ansible_managed }}
+// Working BIND resolver accepting queries on localhost (the doh-server upstream).
+
+options {
+    directory "{{ bind_install_data_dir }}";
+
+    listen-on port 53 { {{ doh_resolver_listen }}; };
+    listen-on-v6 port 53 { ::1; };
+
+    recursion yes;
+    allow-recursion { localhost; };
+    allow-query { localhost; };
+
+    dnssec-validation {{ doh_resolver_dnssec_validation }};
+};

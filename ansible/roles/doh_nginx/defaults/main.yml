@@ -1,0 +1,14 @@
+---
+doh_nginx_server_name: dns.example.com
+doh_nginx_backend_port: "{{ doh_server_port | default(8054) }}"
+doh_nginx_allow:
+  - 192.168.0.0/16
+  - 10.0.0.0/8
+doh_nginx_rate: 100r/s
+doh_nginx_burst: 200
+doh_nginx_conn_limit: 50
+# Self-signed certificate for testing. Set false and point the paths at real files (e.g. Let's Encrypt).
+doh_nginx_selfsigned: true
+doh_nginx_selfsigned_days: 365
+doh_nginx_ssl_certificate: /etc/nginx/ssl/{{ doh_nginx_server_name }}.crt
+doh_nginx_ssl_certificate_key: /etc/nginx/ssl/{{ doh_nginx_server_name }}.key

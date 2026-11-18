@@ -1,0 +1,6 @@
+---
+- name: Restart doh-server
+  ansible.builtin.systemd_service:
+    name: doh-server
+    state: restarted
+    daemon_reload: true

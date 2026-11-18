@@ -1,0 +1,66 @@
+---
+- name: Install nginx and the Python cryptography library
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - python3-cryptography
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the self-signed certificate
+  when: doh_nginx_selfsigned
+  block:
+    - name: Create the certificate directory
+      ansible.builtin.file:
+        path: "{{ doh_nginx_ssl_certificate | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Generate the private key
+      community.crypto.openssl_privatekey:
+        path: "{{ doh_nginx_ssl_certificate_key }}"
+        type: ECC
+        curve: secp256r1
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Generate the certificate signing request
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ doh_nginx_ssl_certificate_key }}"
+        common_name: "{{ doh_nginx_server_name }}"
+        subject_alt_name:
+          - "DNS:{{ doh_nginx_server_name }}"
+      register: doh_nginx_csr
+      changed_when: false
+
+    - name: Generate the self-signed certificate
+      community.crypto.x509_certificate:
+        path: "{{ doh_nginx_ssl_certificate }}"
+        csr_content: "{{ doh_nginx_csr.csr }}"
+        privatekey_path: "{{ doh_nginx_ssl_certificate_key }}"
+        provider: selfsigned
+        selfsigned_not_after: "+{{ doh_nginx_selfsigned_days }}d"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload nginx
+
+- name: Install the DoH nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: nginx -t -c %s
+  notify: Reload nginx
+
+- name: Enable and start nginx
+  ansible.builtin.service:
+    name: nginx
+    enabled: true
+    state: started

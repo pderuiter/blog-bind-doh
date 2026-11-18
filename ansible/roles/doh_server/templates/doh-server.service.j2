@@ -1,0 +1,18 @@
+# /etc/systemd/system/doh-server.service
+# {{ ansible_managed }}
+
+[Unit]
+Description=DNS over HTTPS Server
+After=network.target
+Requires=named.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/doh-server -conf /etc/dns-over-https/doh-server.conf
+Restart=always
+RestartSec=5
+User=nobody
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+---
+- name: Configure BIND as a localhost resolver
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: "{{ bind_install_options_conf }}"
+    owner: root
+    group: "{{ bind_install_group }}"
+    mode: "0640"
+    validate: named-checkconf %s
+  notify: Restart named
+
+- name: Start named
+  ansible.builtin.service:
+    name: "{{ bind_install_service }}"
+    state: started

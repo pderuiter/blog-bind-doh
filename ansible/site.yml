@@ -1,0 +1,8 @@
+---
+- name: DNS over HTTPS with BIND, doh-server and nginx
+  hosts: doh_servers
+  roles:
+    - role: bind_install
+    - role: doh_resolver
+    - role: doh_server
+    - role: doh_nginx

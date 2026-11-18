@@ -1,0 +1,85 @@
+---
+- name: Install the Go toolchain
+  ansible.builtin.apt:
+    name:
+      - golang-go
+      - git
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Check whether this doh-server version is already built
+  ansible.builtin.stat:
+    path: "{{ doh_server_install_dir }}/{{ doh_server_version }}/doh-server"
+  register: doh_server_binary
+
+- name: Build doh-server {{ doh_server_version }}
+  when: not doh_server_binary.stat.exists
+  notify: Restart doh-server
+  block:
+    - name: Create the build and install directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ doh_server_build_dir }}"
+        - "{{ doh_server_install_dir }}/{{ doh_server_version }}"
+
+    - name: Compile doh-server with go install
+      ansible.builtin.command:
+        cmd: go install github.com/m13253/dns-over-https/v2/doh-server@{{ doh_server_version }}
+        creates: "{{ doh_server_install_dir }}/{{ doh_server_version }}/doh-server"
+      environment:
+        GOBIN: "{{ doh_server_install_dir }}/{{ doh_server_version }}"
+        GOPATH: "{{ doh_server_build_dir }}/gopath"
+        GOCACHE: "{{ doh_server_build_dir }}/cache"
+        GOTOOLCHAIN: "{{ doh_server_gotoolchain }}"
+
+    - name: Remove the Go build cache (about 500 MB)
+      ansible.builtin.file:
+        path: "{{ doh_server_build_dir }}"
+        state: absent
+      when: doh_server_remove_build_cache
+
+- name: Link the doh-server binary
+  ansible.builtin.file:
+    src: "{{ doh_server_install_dir }}/{{ doh_server_version }}/doh-server"
+    dest: /usr/local/bin/doh-server
+    state: link
+  notify: Restart doh-server
+
+- name: Create the config directory
+  ansible.builtin.file:
+    path: /etc/dns-over-https
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure doh-server
+  ansible.builtin.template:
+    src: doh-server.conf.j2
+    dest: /etc/dns-over-https/doh-server.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart doh-server
+
+- name: Install the doh-server systemd unit
+  ansible.builtin.template:
+    src: doh-server.service.j2
+    dest: /etc/systemd/system/doh-server.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart doh-server
+
+- name: Enable and start doh-server
+  ansible.builtin.systemd_service:
+    name: doh-server
+    enabled: true
+    state: started
+    daemon_reload: true

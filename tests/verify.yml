@@ -1,0 +1,89 @@
+---
+# Functional checks from the post. Run after site.yml:
+#   ansible-playbook tests/verify.yml
+- name: Verify DNS over HTTPS
+  hosts: doh_servers
+  gather_facts: false
+  vars:
+    verify_name: "{{ doh_nginx_server_name | default('dns.example.com') }}"
+    verify_port: "{{ doh_server_port | default(8054) }}"
+    verify_ca: "/etc/nginx/ssl/{{ verify_name }}.crt"
+    # example.com A query, base64url without padding (the post's test query)
+    verify_query: AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE
+    verify_curl: "curl -s --cacert {{ verify_ca }} --resolve {{ verify_name }}:443:127.0.0.1"
+  tasks:
+    - name: Install the DoH test clients
+      ansible.builtin.apt:
+        name:
+          - knot-dnsutils
+          - curl
+        state: present
+
+    - name: Query doh-server directly on its backend port
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ verify_port }}/dns-query?dns={{ verify_query }}"
+        headers:
+          accept: application/dns-message
+      register: verify_backend
+      until: verify_backend.status == 200
+      retries: 10
+      delay: 2
+
+    - name: GET through nginx
+      ansible.builtin.command: >-
+        {{ verify_curl }} -o /dev/null -w '%{http_code} %{content_type}'
+        -H 'accept: application/dns-message'
+        https://{{ verify_name }}/dns-query?dns={{ verify_query }}
+      register: verify_get
+      changed_when: false
+
+    - name: POST through nginx
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        echo -n '{{ verify_query }}=' | base64 -d |
+        {{ verify_curl }} -o /dev/null -w '%{http_code} %{content_type}'
+        -H 'content-type: application/dns-message' -H 'accept: application/dns-message'
+        --data-binary @- https://{{ verify_name }}/dns-query
+      args:
+        executable: /bin/bash
+      register: verify_post
+      changed_when: false
+
+    - name: POST with a wrong content type
+      ansible.builtin.command: >-
+        {{ verify_curl }} -o /dev/null -w '%{http_code}'
+        -H 'content-type: text/plain' --data 'hello'
+        https://{{ verify_name }}/dns-query
+      register: verify_badtype
+      changed_when: false
+
+    - name: Health check
+      ansible.builtin.command: >-
+        {{ verify_curl }} -w ' %{http_code}' https://{{ verify_name }}/health
+      register: verify_health
+      changed_when: false
+
+    - name: Resolve a name with curl --doh-url
+      ansible.builtin.command: >-
+        {{ verify_curl }} -o /dev/null -w '%{http_code}'
+        --doh-url https://{{ verify_name }}/dns-query http://example.com/
+      register: verify_dohurl
+      changed_when: false
+
+    - name: Query with kdig over HTTPS
+      ansible.builtin.command: >-
+        kdig @127.0.0.1 +https=/dns-query +tls-ca={{ verify_ca }} +tls-hostname={{ verify_name }}
+        example.com A
+      register: verify_kdig
+      changed_when: false
+
+    - name: Check the results
+      ansible.builtin.assert:
+        that:
+          - verify_backend.content_type == 'application/dns-message'
+          - verify_get.stdout == '200 application/dns-message'
+          - verify_post.stdout == '200 application/dns-message'
+          - verify_badtype.stdout == '415'
+          - verify_health.stdout == 'OK\n 200'
+          - verify_dohurl.stdout == '200'
+          - verify_kdig.stdout is search('status. NOERROR')
